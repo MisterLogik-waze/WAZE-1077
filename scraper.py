@@ -3,6 +3,7 @@ import json
 import os
 import re
 import requests
+import time
 from playwright.sync_api import sync_playwright
 
 TARGET_URL = "https://www.vinci-autoroutes.com/fr/autoroutes-temps-reel/"
@@ -160,7 +161,8 @@ def clean_and_format_event(ev):
         f"🔗 [Ouvrir dans WME]({pwme_url}) / [Bêta]({bwme_url}) | {direction_emoji}"
     )
 
-    ev_id = f"{event_type}_{lat}_{lon}_{raw_date}"
+    # ev_id = f"{event_type}_{lat}_{lon}_{raw_date}"
+    ev_id = f"{event_type}_{lat}_{lon}_{route_name}"
 
     return ev_id, title, description, color, is_important
 
@@ -230,9 +232,9 @@ def run():
                 
             if ev_id not in seen_events:
                 new_seen_events.add(ev_id)
-                # FILTRE : On n'envoie sur Discord que si l'événement est important (Fermetures, Accidents, Travaux)
                 if is_important:
                     send_discord_alert(title, description, color)
+                    time.sleep(1.5) # Pause de 1.5 seconde pour respecter les rate limits de Discord
                 else:
                     print(f"[FILTRÉ] Événement ignoré pour Discord : {title}")
 
