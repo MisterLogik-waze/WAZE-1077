@@ -88,6 +88,9 @@ def clean_and_format_event(ev):
     elif "voie de gauche" in msg_lower:
         direction_emoji = "⬅"
         direction_text = " - Voie de Gauche"
+    elif "voie médiane" in msg_lower:
+        direction_emoji = "⬆"
+        direction_text = " - Voie Médiane"
     elif "voie de droite" in msg_lower:
         direction_emoji = "➡"
         direction_text = " - Voie de Droite"
