@@ -20,9 +20,6 @@ def save_seen_events(seen_set):
         json.dump(list(seen_set), f, ensure_ascii=False, indent=2)
 
 def extract_json_from_js(js_text):
-    """
-    Extrait l'objet ou le tableau JSON contenu dans le fichier .js
-    """
     match = re.search(r'(\{.*\}|\[.*\])', js_text, re.DOTALL)
     if match:
         try:
@@ -33,25 +30,24 @@ def extract_json_from_js(js_text):
 
 def clean_and_format_event(ev):
     """
-    Nettoie et formate un événement brut de la liste events.js
-    Structure brute attendue : [coords_dict, event_type, raw_date, message_dict]
+    Nettoie, formate l'événement et attribue les émojis, couleurs et balises de routes/sens.
     """
     if not isinstance(ev, list) or len(ev) < 4:
-        return None, None, None
+        return None, None, None, 15158332
 
     coords_dict = ev[0]
     event_type = ev[1]
     raw_date = ev[2]
     message_dict = ev[3]
 
-    # Formatage de la date
+    # Formatage de la date avec l'émoji demandé
     try:
         dt = datetime.fromisoformat(raw_date)
-        formatted_date = dt.strftime("%d/%m/%Y %H:%M:%S")
+        formatted_date = f"🕒 Date: {dt.strftime('%d/%m/%Y %H:%M:%S')}"
     except Exception:
-        formatted_date = raw_date
+        formatted_date = f"🕒 Date: {raw_date}"
 
-    # Extraction propre des coordonnées (on évite les doublons du dictionnaire horaire)
+    # Extraction des coordonnées
     lat, lon = 0.0, 0.0
     if isinstance(coords_dict, dict) and coords_dict:
         first_hour_key = list(coords_dict.keys())[0]
@@ -61,42 +57,93 @@ def clean_and_format_event(ev):
             if isinstance(first_point, list) and len(first_point) >= 2:
                 lat, lon = first_point[0], first_point[1]
 
-    # Extraction du message
+    # Message
     message = "Information trafic non disponible"
     if isinstance(message_dict, dict):
         message = message_dict.get("FR", message)
     elif isinstance(message_dict, str):
         message = message_dict
 
-    # Correspondance des types d'événements pour le titre
-    type_labels = {
-        "TR": "Travaux",
-        "AC": "Accident",
-        "IN": "Incident / Véhicule arrêté",
-        "IF": "Information réseau"
-    }
-    label = type_labels.get(event_type, "Trafic")
-    title = f"🚧 {label} ({event_type})"
+    # 1. Extraction de la route (Regex sur Axxx, Nxxx, Dxxx)
+    route_match = re.search(r'\b([AND]\d+)\b', message)
+    route_name = route_match.group(1) if route_match else "Réseau"
 
-    # Création du lien WME propre (sans la virgule erronée dans le paramètre lat)
+    # 2. Détection du sens ou des voies concernées + émoji associé
+    direction_emoji = "🛣️"
+    direction_text = ""
+    
+    msg_lower = message.lower()
+    if "toutes les voies" in msg_lower:
+        direction_emoji = "⟺"
+        direction_text = " - Toutes les voies"
+    elif "deux sens" in msg_lower or "les deux sens" in msg_lower:
+        direction_emoji = "⇄"
+        direction_text = " - Dans les deux sens"
+    elif "voie de gauche" in msg_lower:
+        direction_emoji = "⬅"
+        direction_text = " - Voie de gauche"
+    elif "voie de droite" in msg_lower:
+        direction_emoji = "➡"
+        direction_text = " - Voie de droite"
+    elif "bande d'arrêt d'urgence" in msg_lower:
+        direction_emoji = "⇝"
+        direction_text = " - BAU"
+    elif "sens" in msg_lower:
+        direction_emoji = "⦽"
+        direction_text = " - NA"
+
+    # 3. Analyse du type / contenu pour la couleur et l'émoji principal
+    # Couleurs : Rouge (fermeture), Orange (travaux/accident/obstacle), Bleu (info/restriction)
+    color_red = 15158332      # Rouge
+    color_orange = 15105570   # Orange
+    color_blue = 3447003      # Bleu
+
+    if any(keyword in msg_lower for keyword in ["fermée", "ferme", "coupure", "coupé"]):
+        main_emoji = "⛔"
+        color = color_red
+        category_label = "Fermeture"
+    elif event_type == "AC" or "accident" in msg_lower:
+        main_emoji = "💥"
+        color = color_orange
+        category_label = "Accident"
+    elif event_type == "TR" or "travaux" in msg_lower:
+        main_emoji = "🦺"
+        color = color_orange
+        category_label = "Travaux"
+    elif event_type == "IN" or any(kw in msg_lower for kw in ["objet sur", "obstacle sur", "dégradée", "panne", "véhicule arrêté"]):
+        main_emoji = "⚠️"
+        color = color_orange
+        category_label = "Incident"
+    elif any(kw in msg_lower for kw in ["réduction de vitesse", "vitesse", "dépassement interdit"]):
+        main_emoji = "ℹ️"
+        color = color_blue
+        category_label = "Information"
+    else:
+        main_emoji = "🚗"
+        color = color_blue
+        category_label = "Restriction"
+
+    # Construction du Titre dynamique : Ex: 🦺 Travaux A8 - Voie de gauche
+    title = f"{main_emoji} {category_label} {route_name}{direction_text}"
+
+    # Lien WME propre
     wme_url = f"https://www.waze.com/fr/editor?env=row&lat={lat}&lon={lon}&zoomLevel=18"
 
-    # Construction de la description formatée
+    # Description formatée
     description = (
-        f">>> **Date:** {formatted_date}\n"
+        f">>> {formatted_date}\n"
         f"📢 **Message:** {message}\n"
-        f"📍 **Coordonnées:** {lat}, {lon}\n"
+        f"📍 **Coordonnées:** {lat}, {lon} {direction_emoji}\n"
         f"🔗 [Ouvrir dans WME]({wme_url})"
     )
 
-    # Identifiant unique de l'événement pour éviter les doublons
     ev_id = f"{event_type}_{lat}_{lon}_{raw_date}"
 
-    return ev_id, title, description
+    return ev_id, title, description, color
 
-def send_discord_alert(title, description, color=15158332):
+def send_discord_alert(title, description, color):
     if not DISCORD_WEBHOOK_URL:
-        print(f"[DRY RUN] {title}\n{description}\n" + "-"*40)
+        print(f"[DRY RUN] Couleur: {color}\n{title}\n{description}\n" + "-"*40)
         return
     
     payload = {
@@ -109,16 +156,12 @@ def send_discord_alert(title, description, color=15158332):
     try:
         response = requests.post(DISCORD_WEBHOOK_URL, json=payload)
         response.raise_for_status()
-        print(f"[DISCORD] Alerte envoyée avec succès : {title}")
+        print(f"[DISCORD] Alerte envoyée : {title}")
     except Exception as e:
         print(f"[ERREUR] Échec de l'envoi Discord : {e}")
 
 def run():
-    captured_data = {
-        "events": None,
-        "alerts": None,
-        "info": None
-    }
+    captured_data = {"events": None}
 
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
@@ -130,54 +173,41 @@ def run():
         def handle_response(response):
             url = response.url
             if "autoroutes-trafic.fr" in url and response.status == 200:
-                try:
-                    if url.endswith("/events.js"):
-                        captured_data["events"] = extract_json_from_js(response.text())
-                        print(f"[OK] events.js capturé depuis {url}")
-                    elif url.endswith("/trafficAlert.js"):
-                        captured_data["alerts"] = extract_json_from_js(response.text())
-                        print(f"[OK] trafficAlert.js capturé depuis {url}")
-                    elif url.endswith("/info.js"):
-                        captured_data["info"] = extract_json_from_js(response.text())
-                        print(f"[OK] info.js capturé depuis {url}")
-                except Exception as e:
-                    print(f"Erreur lecture réponse {url}: {e}")
+                if url.endswith("/events.js"):
+                    captured_data["events"] = extract_json_from_js(response.text())
+                    print(f"[OK] events.js capturé depuis {url}")
 
         page.on("response", handle_response)
 
         print("Chargement de la page Vinci Autoroutes...")
         page.goto(TARGET_URL, wait_until="networkidle", timeout=60000)
         
-        # Attente active que events.js soit bien intercepté
         import time
-        timeout = 15
         start_time = time.time()
-        while time.time() - start_time < timeout:
+        while time.time() - start_time < 15:
             if captured_data["events"] is not None:
                 break
             page.wait_for_timeout(1000)
 
         browser.close()
 
-    # Traitement des données capturées
     seen_events = load_seen_events()
     new_seen_events = set(seen_events)
 
     if captured_data["events"]:
-        # Sauvegarde brute pour inspection
         with open("debug_events.json", "w", encoding="utf-8") as f:
             json.dump(captured_data["events"], f, ensure_ascii=False, indent=2)
             
         events_list = captured_data["events"] if isinstance(captured_data["events"], list) else []
         
         for ev in events_list:
-            ev_id, title, description = clean_and_format_event(ev)
+            ev_id, title, description, color = clean_and_format_event(ev)
             if not ev_id:
                 continue
                 
             if ev_id not in seen_events:
                 new_seen_events.add(ev_id)
-                send_discord_alert(title, description)
+                send_discord_alert(title, description, color)
 
     save_seen_events(new_seen_events)
     print("Traitement terminé avec succès.")
