@@ -69,7 +69,7 @@ def clean_and_format_event(ev):
     route_name = route_match.group(1) if route_match else "Réseau"
 
     # 2. Détection du sens ou des voies concernées + émoji associé
-    direction_emoji = "🛣️"
+    direction_emoji = " "
     direction_text = ""
     
     msg_lower = message.lower()
@@ -114,7 +114,7 @@ def clean_and_format_event(ev):
         main_emoji = "⚠️"
         color = color_orange
         category_label = "Incident"
-    elif any(kw in msg_lower for kw in ["réduction de vitesse", "vitesse", "dépassement interdit"]):
+    elif any(kw in msg_lower for kw in ["réduction de vitesse", "vitesse", "dépassement interdit", "Réduction du nombre"]):
         main_emoji = "ℹ️"
         color = color_blue
         category_label = "Information"
