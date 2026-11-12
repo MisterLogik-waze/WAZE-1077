@@ -114,7 +114,7 @@ def clean_and_format_event(ev):
         main_emoji = "⚠️"
         color = color_orange
         category_label = "Incident"
-    elif any(kw in msg_lower for kw in ["réduction de vitesse", "vitesse", "dépassement interdit", "Réduction du nombre"]):
+    elif any(kw in msg_lower for kw in ["réduction de vitesse", "vitesse", "dépassement interdit", "Réduction du nombre", "Plus de distribution"]):
         main_emoji = "ℹ️"
         color = color_blue
         category_label = "Information"
