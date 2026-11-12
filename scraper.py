@@ -146,8 +146,8 @@ def clean_and_format_event(ev):
     description = (
         f">>> {formatted_date}\n"
         f"📢 **Message:** {message}\n"
-        f"📍 **Coordonnées:** {lat}, {lon} {direction_emoji}\n"
-        f"🔗 [Ouvrir dans WME]({pwme_url}) / [Bêta]({bwme_url})"
+        f"📍 **Coordonnées:** {lat}, {lon}\n"
+        f"🔗 [Ouvrir dans WME]({pwme_url}) / [Bêta]({bwme_url}) | {direction_emoji}"
     )
 
     ev_id = f"{event_type}_{lat}_{lon}_{raw_date}"
