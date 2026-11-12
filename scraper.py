@@ -64,9 +64,9 @@ def clean_and_format_event(ev):
     elif isinstance(message_dict, str):
         message = message_dict
 
-    # 1. Extraction de la route (Regex sur Axxx, Nxxx, Dxxx)
-    route_match = re.search(r'\b([AND]\d+)\b', message)
-    route_name = route_match.group(1) if route_match else "Réseau"
+    # 1. Extraction de la route (Regex élargie pour capturer A7N, A8, N164, etc.)
+    route_match = re.search(r'\b([AND]\d+[A-Z]*)\b', message)
+    route_name = route_match.group(1) if route_match else "ABC"
 
     # 2. Détection du sens ou des voies concernées + émoji associé
     direction_emoji = " "
@@ -75,19 +75,28 @@ def clean_and_format_event(ev):
     msg_lower = message.lower()
     if "toutes les voies" in msg_lower:
         direction_emoji = "⟺"
-        direction_text = " - Toutes les voies"
+        direction_text = " - Toutes les Voies"
     elif "deux sens" in msg_lower or "les deux sens" in msg_lower:
         direction_emoji = "⇄"
-        direction_text = " - Dans les deux sens"
+        direction_text = " - Deux sens"
+    elif "bretelle d'entrée" in msg_lower:
+        direction_emoji = "↖"
+        direction_text = " - Bretelle Entrée"
+    elif "bretelle de sortie" in msg_lower:
+        direction_emoji = "↗"
+        direction_text = " - Bretelle Sortie"
     elif "voie de gauche" in msg_lower:
         direction_emoji = "⬅"
-        direction_text = " - Voie de gauche"
+        direction_text = " - Voie de Gauche"
     elif "voie de droite" in msg_lower:
         direction_emoji = "➡"
-        direction_text = " - Voie de droite"
+        direction_text = " - Voie de Droite"
     elif "bande d'arrêt d'urgence" in msg_lower:
         direction_emoji = "⇝"
         direction_text = " - BAU"
+    elif "Voies neutralisées" in msg_lower:
+        direction_emoji = "❌"
+        direction_text = " - Voie Neutralisées"
     elif "sens" in msg_lower:
         direction_emoji = "⦽"
         direction_text = " - NA"
@@ -98,7 +107,7 @@ def clean_and_format_event(ev):
     color_orange = 15105570   # Orange
     color_blue = 3447003      # Bleu
 
-    if any(keyword in msg_lower for keyword in ["fermée", "ferme", "coupure", "coupé"]):
+    if any(keyword in msg_lower for keyword in ["fermée", "ferme", "coupure", "coupé", "Voies neutralisées", "voie neutralisée"]):
         main_emoji = "⛔"
         color = color_red
         category_label = "Fermeture"
@@ -127,14 +136,15 @@ def clean_and_format_event(ev):
     title = f"{main_emoji} {category_label} {route_name}{direction_text}"
 
     # Lien WME propre
-    wme_url = f"https://www.waze.com/fr/editor?env=row&lat={lat}&lon={lon}&zoomLevel=18"
+    pwme_url = f"https://www.waze.com/fr/editor?env=row&lat={lat}&lon={lon}&zoomLevel=18"
+    bwme_url = f"https://beta.waze.com/fr/editor?env=row&lat={lat}&lon={lon}&zoomLevel=18"
 
     # Description formatée
     description = (
         f">>> {formatted_date}\n"
         f"📢 **Message:** {message}\n"
         f"📍 **Coordonnées:** {lat}, {lon} {direction_emoji}\n"
-        f"🔗 [Ouvrir dans WME]({wme_url})"
+        f"🔗 [Ouvrir dans WME]({pwme_url}) / [Bêta]({bwme_url})"
     )
 
     ev_id = f"{event_type}_{lat}_{lon}_{raw_date}"
