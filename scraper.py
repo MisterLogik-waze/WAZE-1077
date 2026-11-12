@@ -31,9 +31,10 @@ def extract_json_from_js(js_text):
 def clean_and_format_event(ev):
     """
     Nettoie, formate l'événement et attribue les émojis, couleurs et balises de routes/sens.
+    Retourne également un booléen `is_important` pour le filtrage.
     """
     if not isinstance(ev, list) or len(ev) < 4:
-        return None, None, None, 15158332
+        return None, None, None, 15158332, False
 
     coords_dict = ev[0]
     event_type = ev[1]
@@ -100,7 +101,7 @@ def clean_and_format_event(ev):
     elif "aire de service" in msg_lower:
         direction_emoji = "i"
         direction_text = " - Aire de Service"
-    elif "voies neutralisée" in msg_lower or "voies neutralisées" in msg_lower or "voie neutralisées" in msg_lower or "voies neutralisée" in msg_lower:
+    elif "voies neutralisée" in msg_lower or "voies neutralisées" in msg_lower or "voie neutralisées" in msg_lower or "voie neutralisée" in msg_lower:
         direction_emoji = "x"
         direction_text = " - Voie.s Neutralisée.s"
     elif "sens" in msg_lower:
@@ -108,27 +109,33 @@ def clean_and_format_event(ev):
         direction_text = " - NA"
 
     # 3. Analyse du type / contenu pour la couleur et l'émoji principal
-    # Couleurs : Rouge (fermeture), Orange (travaux/accident/obstacle), Bleu (info/restriction)
     color_red = 15158332      # Rouge
     color_orange = 15105570   # Orange
     color_blue = 3447003      # Bleu
+
+    # Détermination de l'importance (Fermetures, Accidents, Travaux)
+    is_important = False
 
     if any(keyword in msg_lower for keyword in ["fermée", "ferme", "coupure", "coupé", "voies neutralisées", "voie neutralisée"]):
         main_emoji = "⛔"
         color = color_red
         category_label = "Fermeture"
+        is_important = True
     elif event_type == "AC" or "accident" in msg_lower:
         main_emoji = "💥"
         color = color_orange
         category_label = "Accident"
+        is_important = True
     elif event_type == "TR" or "travaux" in msg_lower:
         main_emoji = "🦺"
         color = color_orange
         category_label = "Travaux"
+        is_important = True
     elif event_type == "IN" or any(kw in msg_lower for kw in ["objet sur", "obstacle sur", "dégradée", "panne", "véhicule arrêté"]):
         main_emoji = "⚠️"
         color = color_orange
         category_label = "Incident"
+        # Optionnel : Mettre is_important = True ici si vous souhaitez aussi les incidents
     elif any(kw in msg_lower for kw in ["réduction de vitesse", "vitesse", "dépassement interdit", "réduction du nombre", "plus de distribution"]):
         main_emoji = "ℹ️"
         color = color_blue
@@ -138,7 +145,7 @@ def clean_and_format_event(ev):
         color = color_blue
         category_label = "Restriction"
 
-    # Construction du Titre dynamique : Ex: 🦺 Travaux A8 - Voie de gauche
+    # Construction du Titre dynamique
     title = f"{main_emoji} {category_label} {route_name}{direction_text}"
 
     # Lien WME propre
@@ -155,7 +162,7 @@ def clean_and_format_event(ev):
 
     ev_id = f"{event_type}_{lat}_{lon}_{raw_date}"
 
-    return ev_id, title, description, color
+    return ev_id, title, description, color, is_important
 
 def send_discord_alert(title, description, color):
     if not DISCORD_WEBHOOK_URL:
@@ -217,13 +224,17 @@ def run():
         events_list = captured_data["events"] if isinstance(captured_data["events"], list) else []
         
         for ev in events_list:
-            ev_id, title, description, color = clean_and_format_event(ev)
+            ev_id, title, description, color, is_important = clean_and_format_event(ev)
             if not ev_id:
                 continue
                 
             if ev_id not in seen_events:
                 new_seen_events.add(ev_id)
-                send_discord_alert(title, description, color)
+                # FILTRE : On n'envoie sur Discord que si l'événement est important (Fermetures, Accidents, Travaux)
+                if is_important:
+                    send_discord_alert(title, description, color)
+                else:
+                    print(f"[FILTRÉ] Événement ignoré pour Discord : {title}")
 
     save_seen_events(new_seen_events)
     print("Traitement terminé avec succès.")
