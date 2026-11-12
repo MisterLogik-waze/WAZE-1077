@@ -20,17 +20,14 @@ def save_seen_events(seen_set):
 
 def extract_json_from_js(js_text):
     """
-    Les fichiers events.js / trafficAlert.js / info.js sont souvent sous la forme :
-    var trafficEvents = {...}; ou callback({...});
-    Cette fonction extrait l'objet JSON principal.
+    Extrait l'objet ou le tableau JSON contenu dans le fichier .js
     """
-    # Recherche le premier '{' ou '[' et le dernier '}' ou ']'
     match = re.search(r'(\{.*\}|\[.*\])', js_text, re.DOTALL)
     if match:
         try:
             return json.loads(match.group(1))
-        except json.JSONDecodeError:
-            print("Erreur de décodage JSON dans le fichier JS.")
+        except json.JSONDecodeError as e:
+            print(f"Erreur de décodage JSON : {e}")
     return None
 
 def send_discord_alert(title, description, color=15158332):
@@ -62,7 +59,6 @@ def run():
         )
         page = context.new_page()
 
-        # Intercepteur de réponses réseau
         def handle_response(response):
             url = response.url
             if "autoroutes-trafic.fr" in url and response.status == 200:
@@ -84,24 +80,34 @@ def run():
         print("Chargement de la page Vinci Autoroutes...")
         page.goto(TARGET_URL, wait_until="networkidle", timeout=60000)
         
-        # Pause supplémentaire pour laisser le temps à l'iframe/script wt3 de finir son appel
-        page.wait_for_timeout(5000)
+        # Attente active que les 3 éléments clés soient bien interceptés
+        import time
+        timeout = 15
+        start_time = time.time()
+        while time.time() - start_time < timeout:
+            if captured_data["events"] is not None:
+                break
+            page.wait_for_timeout(1000)
+
         browser.close()
 
     # Traitement des données capturées
     seen_events = load_seen_events()
     new_seen_events = set(seen_events)
 
-    # Exemple de traitement sur events.js (la structure exacte dépend des clés du JSON)
     if captured_data["events"]:
-        # Sauvegarde brute pour inspection lors de ton premier test
+        # Sauvegarde brute pour inspection
         with open("debug_events.json", "w", encoding="utf-8") as f:
             json.dump(captured_data["events"], f, ensure_ascii=False, indent=2)
             
-        # Exemple générique d'itération (à adapter selon les clés réelles de debug_events.json)
-        events_list = captured_data["events"] if isinstance(captured_data["events"], list) else captured_data["events"].get("events", [])
+        # Si c'est directement une liste, on l'utilise telle quelle
+        events_list = captured_data["events"] if isinstance(captured_data["events"], list) else []
         
         for ev in events_list:
+            # Sécurisation si un élément de la liste n'est pas un dictionnaire
+            if not isinstance(ev, dict):
+                continue
+                
             ev_id = str(ev.get("id") or ev.get("eventId") or hash(str(ev)))
             if ev_id not in seen_events:
                 new_seen_events.add(ev_id)
@@ -110,6 +116,7 @@ def run():
                 send_discord_alert(f"🚧 {titre}", desc)
 
     save_seen_events(new_seen_events)
+    print("Traitement terminé avec succès.")
 
 if __name__ == "__main__":
     run()
