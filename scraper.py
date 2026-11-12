@@ -94,10 +94,10 @@ def clean_and_format_event(ev):
     elif "bande d'arrêt d'urgence" in msg_lower:
         direction_emoji = "⇝"
         direction_text = " - BAU"
-    elif "bande d'arrêt d'urgence" in msg_lower:
+    elif "aire de service" in msg_lower:
         direction_emoji = "i"
         direction_text = " - Aire de Service"
-    elif "Voies neutralisée" in msg_lower or "Voies neutralisées" in msg_lower or "Voie neutralisées" in msg_lower or "Voies neutralisée" in msg_lower:
+    elif "voies neutralisée" in msg_lower or "voies neutralisées" in msg_lower or "voie neutralisées" in msg_lower or "voies neutralisée" in msg_lower:
         direction_emoji = "❌"
         direction_text = " - Voie.s Neutralisée.s"
     elif "sens" in msg_lower:
@@ -110,7 +110,7 @@ def clean_and_format_event(ev):
     color_orange = 15105570   # Orange
     color_blue = 3447003      # Bleu
 
-    if any(keyword in msg_lower for keyword in ["fermée", "ferme", "coupure", "coupé", "Voies neutralisées", "voie neutralisée"]):
+    if any(keyword in msg_lower for keyword in ["fermée", "ferme", "coupure", "coupé", "voies neutralisées", "voie neutralisée"]):
         main_emoji = "⛔"
         color = color_red
         category_label = "Fermeture"
@@ -126,7 +126,7 @@ def clean_and_format_event(ev):
         main_emoji = "⚠️"
         color = color_orange
         category_label = "Incident"
-    elif any(kw in msg_lower for kw in ["réduction de vitesse", "vitesse", "dépassement interdit", "Réduction du nombre", "Plus de distribution"]):
+    elif any(kw in msg_lower for kw in ["réduction de vitesse", "vitesse", "dépassement interdit", "réduction du nombre", "plus de distribution"]):
         main_emoji = "ℹ️"
         color = color_blue
         category_label = "Information"
