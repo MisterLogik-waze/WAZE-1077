@@ -44,9 +44,9 @@ def clean_and_format_event(ev):
     # Formatage de la date avec l'émoji demandé
     try:
         dt = datetime.fromisoformat(raw_date)
-        formatted_date = f"🕒 Date: {dt.strftime('%d/%m/%Y %H:%M:%S')}"
+        formatted_date = f"🕒 **Date**: {dt.strftime('%d/%m/%Y %H:%M:%S')}"
     except Exception:
-        formatted_date = f"🕒 Date: {raw_date}"
+        formatted_date = f"🕒 **Date**: {raw_date}"
 
     # Extraction des coordonnées
     lat, lon = 0.0, 0.0
