@@ -1,3 +1,4 @@
+from datetime import datetime
 import json
 import os
 import re
@@ -30,9 +31,72 @@ def extract_json_from_js(js_text):
             print(f"Erreur de décodage JSON : {e}")
     return None
 
+def clean_and_format_event(ev):
+    """
+    Nettoie et formate un événement brut de la liste events.js
+    Structure brute attendue : [coords_dict, event_type, raw_date, message_dict]
+    """
+    if not isinstance(ev, list) or len(ev) < 4:
+        return None, None, None
+
+    coords_dict = ev[0]
+    event_type = ev[1]
+    raw_date = ev[2]
+    message_dict = ev[3]
+
+    # Formatage de la date
+    try:
+        dt = datetime.fromisoformat(raw_date)
+        formatted_date = dt.strftime("%d/%m/%Y %H:%M:%S")
+    except Exception:
+        formatted_date = raw_date
+
+    # Extraction propre des coordonnées (on évite les doublons du dictionnaire horaire)
+    lat, lon = 0.0, 0.0
+    if isinstance(coords_dict, dict) and coords_dict:
+        first_hour_key = list(coords_dict.keys())[0]
+        coords_data = coords_dict[first_hour_key]
+        if isinstance(coords_data, list) and len(coords_data) > 0:
+            first_point = coords_data[0]
+            if isinstance(first_point, list) and len(first_point) >= 2:
+                lat, lon = first_point[0], first_point[1]
+
+    # Extraction du message
+    message = "Information trafic non disponible"
+    if isinstance(message_dict, dict):
+        message = message_dict.get("FR", message)
+    elif isinstance(message_dict, str):
+        message = message_dict
+
+    # Correspondance des types d'événements pour le titre
+    type_labels = {
+        "TR": "Travaux",
+        "AC": "Accident",
+        "IN": "Incident / Véhicule arrêté",
+        "IF": "Information réseau"
+    }
+    label = type_labels.get(event_type, "Trafic")
+    title = f"🚧 {label} ({event_type})"
+
+    # Création du lien WME propre (sans la virgule erronée dans le paramètre lat)
+    wme_url = f"https://www.waze.com/fr/editor?env=row&lat={lat}&lon={lon}&zoomLevel=18"
+
+    # Construction de la description formatée
+    description = (
+        f">>> **Date:** {formatted_date}\n"
+        f"📢 **Message:** {message}\n"
+        f"📍 **Coordonnées:** {lat}, {lon}\n"
+        f"🔗 [Ouvrir dans WME]({wme_url})"
+    )
+
+    # Identifiant unique de l'événement pour éviter les doublons
+    ev_id = f"{event_type}_{lat}_{lon}_{raw_date}"
+
+    return ev_id, title, description
+
 def send_discord_alert(title, description, color=15158332):
     if not DISCORD_WEBHOOK_URL:
-        print(f"[DRY RUN] {title} - {description}")
+        print(f"[DRY RUN] {title}\n{description}\n" + "-"*40)
         return
     
     payload = {
@@ -42,8 +106,12 @@ def send_discord_alert(title, description, color=15158332):
             "color": color
         }]
     }
-    response = requests.post(DISCORD_WEBHOOK_URL, json=payload)
-    response.raise_for_status()
+    try:
+        response = requests.post(DISCORD_WEBHOOK_URL, json=payload)
+        response.raise_for_status()
+        print(f"[DISCORD] Alerte envoyée avec succès : {title}")
+    except Exception as e:
+        print(f"[ERREUR] Échec de l'envoi Discord : {e}")
 
 def run():
     captured_data = {
@@ -80,7 +148,7 @@ def run():
         print("Chargement de la page Vinci Autoroutes...")
         page.goto(TARGET_URL, wait_until="networkidle", timeout=60000)
         
-        # Attente active que les 3 éléments clés soient bien interceptés
+        # Attente active que events.js soit bien intercepté
         import time
         timeout = 15
         start_time = time.time()
@@ -100,20 +168,16 @@ def run():
         with open("debug_events.json", "w", encoding="utf-8") as f:
             json.dump(captured_data["events"], f, ensure_ascii=False, indent=2)
             
-        # Si c'est directement une liste, on l'utilise telle quelle
         events_list = captured_data["events"] if isinstance(captured_data["events"], list) else []
         
         for ev in events_list:
-            # Sécurisation si un élément de la liste n'est pas un dictionnaire
-            if not isinstance(ev, dict):
+            ev_id, title, description = clean_and_format_event(ev)
+            if not ev_id:
                 continue
                 
-            ev_id = str(ev.get("id") or ev.get("eventId") or hash(str(ev)))
             if ev_id not in seen_events:
                 new_seen_events.add(ev_id)
-                titre = ev.get("title", "Nouvel événement trafic")
-                desc = ev.get("description", str(ev)[:200])
-                send_discord_alert(f"🚧 {titre}", desc)
+                send_discord_alert(title, description)
 
     save_seen_events(new_seen_events)
     print("Traitement terminé avec succès.")
