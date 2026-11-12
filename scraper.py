@@ -94,9 +94,12 @@ def clean_and_format_event(ev):
     elif "bande d'arrêt d'urgence" in msg_lower:
         direction_emoji = "⇝"
         direction_text = " - BAU"
-    elif "Voies neutralisées" in msg_lower:
+    elif "bande d'arrêt d'urgence" in msg_lower:
+        direction_emoji = "i"
+        direction_text = " - Aire de Service"
+    elif "Voies neutralisée" in msg_lower or "Voies neutralisées" in msg_lower or "Voie neutralisées" in msg_lower or "Voies neutralisée" in msg_lower:
         direction_emoji = "❌"
-        direction_text = " - Voie Neutralisées"
+        direction_text = " - Voie.s Neutralisée.s"
     elif "sens" in msg_lower:
         direction_emoji = "⦽"
         direction_text = " - NA"
