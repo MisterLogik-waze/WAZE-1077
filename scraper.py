@@ -98,7 +98,7 @@ def clean_and_format_event(ev):
         direction_emoji = "i"
         direction_text = " - Aire de Service"
     elif "voies neutralisée" in msg_lower or "voies neutralisées" in msg_lower or "voie neutralisées" in msg_lower or "voies neutralisée" in msg_lower:
-        direction_emoji = "❌"
+        direction_emoji = "x"
         direction_text = " - Voie.s Neutralisée.s"
     elif "sens" in msg_lower:
         direction_emoji = "⦽"
