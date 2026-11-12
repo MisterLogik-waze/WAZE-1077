@@ -1,0 +1,41 @@
+name: Vinci Trafic Scraper
+
+on:
+  schedule:
+    # Exécute toutes les 10 minutes
+    - cron: '*/10 * * * *'
+  workflow_dispatch: # Permet de lancer le script manuellement pour tester
+
+permissions:
+  contents: write # Nécessaire pour sauvegarder seen_events.json
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Récupérer le dépôt
+        uses: actions/checkout@v4
+
+      - name: Configurer Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Installer les dépendances
+        run: |
+          pip install requests playwright
+          playwright install chromium
+
+      - name: Lancer le scraper
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: python scraper.py
+
+      - name: Sauvegarder l'état (évite les doublons Discord)
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add seen_events.json debug_events.json || true
+          git commit -m "Mise à jour état trafic" || exit 0
+          git push
