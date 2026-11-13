@@ -3,7 +3,7 @@ name: Vinci Trafic Scraper
 on:
   schedule:
     # Exécute toutes les 10 minutes
-    - cron: '*/15 * * * *'
+    - cron: '*/30 * * * *'
   workflow_dispatch: # Permet de lancer le script manuellement pour tester
 
 permissions:
