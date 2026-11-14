@@ -31,8 +31,10 @@ def extract_json_from_js(js_text):
 
 def clean_and_format_event(ev):
     """
-    Nettoie, formate l'événement et attribue les émojis, couleurs et balises de routes/sens.
-    Retourne également un booléen `is_important` pour le filtrage.
+    Nettoie, formate l'événement et applique les filtres stricts pour les fermetures :
+    - Fermeture complète ou de toutes les voies requise.
+    - Exclusion des fermetures d'une seule voie.
+    - Exclusion de la bande d'arrêt d'urgence (BAU).
     """
     if not isinstance(ev, list) or len(ev) < 4:
         return None, None, None, 15158332, False
@@ -42,7 +44,7 @@ def clean_and_format_event(ev):
     raw_date = ev[2]
     message_dict = ev[3]
 
-    # Formatage de la date avec l'émoji demandé
+    # Formatage de la date
     try:
         dt = datetime.fromisoformat(raw_date)
         formatted_date = f"🕒 **Date**: {dt.strftime('%d/%m/%Y %H:%M:%S')}"
@@ -66,7 +68,7 @@ def clean_and_format_event(ev):
     elif isinstance(message_dict, str):
         message = message_dict
 
-    # 1. Extraction de la route (Regex élargie pour capturer A7N, A8, N164, etc.)
+    # 1. Extraction de la route
     route_match = re.search(r'\b([AND]\d+[A-Z]*)\b', message)
     route_name = route_match.group(1) if route_match else "ABC"
 
@@ -102,7 +104,7 @@ def clean_and_format_event(ev):
     elif "aire de service" in msg_lower:
         direction_emoji = "i"
         direction_text = " - Aire de Service"
-    elif "voies neutralisée" in msg_lower or "voies neutralisées" in msg_lower or "voie neutralisées" in msg_lower or "voie neutralisée" in msg_lower:
+    elif "voie neutralisée" in msg_lower or "voies neutralisées" in msg_lower or "voie neutralisée" in msg_lower:
         direction_emoji = "x"
         direction_text = " - Voie.s Neutralisée.s"
     elif "sens" in msg_lower:
@@ -114,37 +116,50 @@ def clean_and_format_event(ev):
     color_orange = 15105570   # Orange
     color_blue = 3447003      # Bleu
 
-    # Détermination de l'importance (Fermetures, Accidents, Travaux)
+    # --- FILTRAGE STRICT DES FERMETURES ---
     is_important = False
 
-    if any(keyword in msg_lower for keyword in ["fermée", "ferme", "coupure", "coupé", "voies neutralisées", "voie neutralisée"]):
+    # Exclusions spécifiques demandées :
+    # - Pannes et véhicules arrêtés
+    is_panne_or_obstacle = any(kw in msg_lower for kw in ["panne", "véhicule arrêté", "véhicule en panne", "obstacle sur", "présence animale", "objet sur"])
+    
+    # - Bandes d'arrêt d'urgence (BAU) à exclure
+    is_bau = "bande d'arrêt d'urgence" in msg_lower
+
+    # - Une seule voie mentionnée (ex: "voie de droite", "voie de gauche", "une voie", etc.) -> on exclut si ce n'est pas "toutes les voies"
+    is_single_lane_closure = any(kw in msg_lower for kw in ["voie de droite", "voie de gauche", "voie médiane", "une voie"]) and "toutes les voies" not in msg_lower
+
+    # Mots-clés généraux de fermeture
+    has_closure_keywords = any(keyword in msg_lower for keyword in [
+        "fermée", "fermé", "coupure", "coupé", "coupée", 
+        "bretelle d'entrée", "bretelle de sortie", "bretelle"
+    ])
+
+    # Validation finale pour l'importance :
+    # Il faut une fermeture/coupure ou bretelle, ET NE PAS être une panne, NE PAS être la BAU, et NE PAS être une simple voie unique.
+    if has_closure_keywords and not is_panne_or_obstacle and not is_bau and not is_single_lane_closure:
         main_emoji = "⛔"
         color = color_red
         category_label = "Fermeture"
         is_important = True
-    elif event_type == "AC" or "accident" in msg_lower:
-        main_emoji = "💥"
-        color = color_orange
-        category_label = "Accident"
-        is_important = True
-    elif event_type == "TR" or "travaux" in msg_lower:
-        main_emoji = "🦺"
-        color = color_orange
-        category_label = "Travaux"
-        is_important = True
-    elif event_type == "IN" or any(kw in msg_lower for kw in ["objet sur", "obstacle sur", "dégradée", "panne", "véhicule arrêté"]):
-        main_emoji = "⚠️"
-        color = color_orange
-        category_label = "Incident"
-        # Optionnel : Mettre is_important = True ici si vous souhaitez aussi les incidents
-    elif any(kw in msg_lower for kw in ["réduction de vitesse", "vitesse", "dépassement interdit", "réduction du nombre", "plus de distribution"]):
-        main_emoji = "ℹ️"
-        color = color_blue
-        category_label = "Information"
     else:
-        main_emoji = "🚗"
-        color = color_blue
-        category_label = "Restriction"
+        # Mode par défaut (classement pour les logs de la console sans alerte Discord)
+        if any(keyword in msg_lower for keyword in ["fermée", "fermé", "coupure", "coupé", "coupée"]):
+            main_emoji = "⛔"
+            color = color_red
+            category_label = "Fermeture"
+        elif event_type == "AC" or "accident" in msg_lower:
+            main_emoji = "💥"
+            color = color_orange
+            category_label = "Accident"
+        elif event_type == "TR" or "travaux" in msg_lower:
+            main_emoji = "🦺"
+            color = color_orange
+            category_label = "Travaux"
+        else:
+            main_emoji = "🚗"
+            color = color_blue
+            category_label = "Restriction"
 
     # Construction du Titre dynamique
     title = f"{main_emoji} {category_label} {route_name}{direction_text}"
@@ -161,7 +176,6 @@ def clean_and_format_event(ev):
         f"🔗 [Ouvrir dans WME]({pwme_url}) / [Bêta]({bwme_url}) | {direction_emoji}"
     )
 
-    # ev_id = f"{event_type}_{lat}_{lon}_{raw_date}"
     ev_id = f"{event_type}_{lat}_{lon}_{route_name}"
 
     return ev_id, title, description, color, is_important
@@ -207,7 +221,6 @@ def run():
         print("Chargement de la page Vinci Autoroutes...")
         page.goto(TARGET_URL, wait_until="networkidle", timeout=60000)
         
-        import time
         start_time = time.time()
         while time.time() - start_time < 15:
             if captured_data["events"] is not None:
@@ -234,7 +247,7 @@ def run():
                 new_seen_events.add(ev_id)
                 if is_important:
                     send_discord_alert(title, description, color)
-                    time.sleep(1.5) # Pause de 1.5 seconde pour respecter les rate limits de Discord
+                    time.sleep(1.5)
                 else:
                     print(f"[FILTRÉ] Événement ignoré pour Discord : {title}")
 
